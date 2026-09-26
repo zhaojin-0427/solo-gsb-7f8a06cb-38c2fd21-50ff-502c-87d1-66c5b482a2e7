@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>快捷键回放器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>⌨️ 快捷键回放器</h1>
+    <p>配置命令与快捷键（一至两步），选择当前作用域，输入按毫秒递增的按键事件，回放匹配与结算过程。</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>可回放示例</h2>
+      <p class="hint">点击任一示例载入配置并立即回放，可在此基础上修改后重新运行。</p>
+      <div id="examples" class="examples"></div>
+    </section>
+
+    <section class="card">
+      <h2>1 · 命令配置</h2>
+      <p class="hint">
+        每步快捷键 = 修饰键（Ctrl / Alt / Shift / Meta，可组合、顺序无关）+ 主键（字母 / 数字 / Enter / Escape）。
+        第 2 步留空即为单步命令。点击输入框旁的 ⌨ 可直接按键录入，也可手工输入（如 <kbd>shift+ctrl+k</kbd>，失焦自动规范化）。
+      </p>
+      <table class="grid">
+        <thead>
+          <tr><th>命令 ID</th><th>作用域</th><th>第 1 步</th><th>第 2 步</th><th></th></tr>
+        </thead>
+        <tbody id="commands-body"></tbody>
+      </table>
+      <button id="add-command" type="button" class="btn">＋ 添加命令</button>
+    </section>
+
+    <section class="card">
+      <h2>2 · 当前作用域</h2>
+      <p class="hint">仅「当前作用域」与「全局」的绑定生效；同一序列优先当前作用域。</p>
+      <div class="scope-radios">
+        <label><input type="radio" name="scope" value="global"> 全局</label>
+        <label><input type="radio" name="scope" value="editor" checked> 编辑器</label>
+        <label><input type="radio" name="scope" value="popup"> 弹窗</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3 · 按键事件（时间按毫秒递增）</h2>
+      <p class="hint">
+        可手工填写，或点击「录制按键」后直接敲击键盘自动记录时间戳（录制时焦点勿落在输入框内；
+        部分系统 / 浏览器快捷键无法被页面捕获）。
+      </p>
+      <table class="grid">
+        <thead>
+          <tr><th>时间 (ms)</th><th>按键</th><th></th></tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+      </table>
+      <div class="row">
+        <button id="add-event" type="button" class="btn">＋ 添加事件</button>
+        <button id="record-btn" type="button" class="btn">● 录制按键</button>
+        <span id="record-hint" class="recording-hint" hidden>录制中… 请直接敲击快捷键</span>
+      </div>
+    </section>
+
+    <section class="card run-card">
+      <button id="run-btn" type="button" class="btn primary">▶ 运行回放</button>
+    </section>
+
+    <section id="results" class="card" hidden>
+      <h2>回放结果</h2>
+      <div id="errors" class="errors" hidden></div>
+      <div id="timeline-wrap">
+        <div id="timeline"></div>
+      </div>
+      <div id="summary" class="summary"></div>
+    </section>
+
+    <section class="card" id="diff-view">
+      <h2>4 · 配置变更影响</h2>
+      <p class="hint">
+        以上方「命令配置」为<b>旧配置</b>，下方为可编辑的<b>候选（新）配置</b>。点击「比较配置」后，
+        对全局、编辑器、弹窗分别搜索使两套配置触发结果（命令 ID 顺序或触发时间）不同的按键样例：
+        按键取两套绑定中出现的规范化键，枚举一键与两键事件（首键 t=0，第二键 t=1 或 800ms）。
+        差异按（旧、新）触发结果组合分组，每组保留事件数最少的样例；结果与命令表行顺序无关。
+      </p>
+      <table class="grid">
+        <thead>
+          <tr><th>命令 ID</th><th>作用域</th><th>第 1 步</th><th>第 2 步</th><th></th></tr>
+        </thead>
+        <tbody id="candidate-body"></tbody>
+      </table>
+      <div class="row">
+        <button id="add-candidate" type="button" class="btn">＋ 添加命令</button>
+        <button id="copy-to-candidate" type="button" class="btn">⧉ 从当前配置复制</button>
+        <button id="compare-btn" type="button" class="btn primary">⇄ 比较配置</button>
+      </div>
+      <div id="diff-errors" class="errors" hidden></div>
+      <div id="diff-results" hidden></div>
+    </section>
+
+    <section class="card" id="repair-view">
+      <h2>5 · 目标命令修正</h2>
+      <p class="hint">
+        沿用上方「命令配置」「当前作用域」与「按键事件」。选择目标命令后，仅把已有事件的按键替换为
+        <b>当前配置中出现的规范化按键</b>（时间戳与事件数保持不变）：先回放原事件，目标已触发则返回零改动；
+        否则搜索至多 <b>2</b> 处不同事件的替换，使目标至少触发一次，按（改动处数、事件下标、替换键）升序取唯一方案
+        （替换为原键不计入改动）。限制：事件 ≤ 8 个、候选按键 ≤ 12 种。
+      </p>
+      <div class="row">
+        <label for="repair-target" class="repair-label">目标命令</label>
+        <select id="repair-target" class="repair-target"></select>
+        <button id="repair-btn" type="button" class="btn primary">🛠 修正目标命令</button>
+      </div>
+      <div id="repair-errors" class="errors" hidden></div>
+      <div id="repair-results" hidden></div>
+    </section>
+
+    <section class="card rules">
+      <h2>匹配规则</h2>
+      <ul>
+        <li>仅当前作用域与全局的绑定生效；同一序列优先当前作用域；同一作用域重复绑定会报错。</li>
+        <li>不是两步前缀的单步命令，按下立即触发。</li>
+        <li>命中两步前缀后等待 <b>800ms</b>：期限内第二键构成两步序列，则触发两步命令。</li>
+        <li>失配或超时先结算前缀：有单步命令则触发，否则丢弃；失配键再作新起点。</li>
+        <li>恰好第 800ms 到达的键：先结算前缀，再作为新键处理。</li>
+        <li>输入结束时，结算仍待定的前缀。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>本地运行 · Node.js + Express + 原生前端 · <a href="/api/replay" title="POST /api/replay">API</a></footer>
+
+  <script src="engine.js"></script>
+  <script src="diff.js"></script>
+  <script src="repair.js"></script>
+  <script src="examples.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

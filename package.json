@@ -1,0 +1,14 @@
+{
+  "name": "shortcut-replay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "本地快捷键回放网页（Node.js + Express + 原生前端）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

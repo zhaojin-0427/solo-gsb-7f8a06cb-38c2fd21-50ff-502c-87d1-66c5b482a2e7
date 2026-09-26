@@ -116,6 +116,29 @@
       <div id="repair-results" hidden></div>
     </section>
 
+    <section class="card" id="synthesize-view">
+      <h2>6 · 命令宏脚本</h2>
+      <p class="hint">
+        沿用上方「命令配置」与「当前作用域」，从<b>空事件</b>生成按键脚本：输入 <b>2～3 个有序命令 ID</b>（可重复），
+        使脚本完整回放（含前缀失配、超时与结束结算、当前作用域对全局的覆盖）触发的命令 ID 列表<b>恰好</b>等于输入顺序，不夹带其他命令。
+        候选按键只取配置中出现的规范化按键；首事件 t=0，相邻事件间隔限 <b>1 或 800ms</b>，
+        最多 <b>5 个事件、5 种候选按键</b>。按（事件数、按键序列、时间戳序列）依次升序取唯一脚本。
+      </p>
+      <div class="row macro-row">
+        <span class="repair-label">目标顺序</span>
+        <select id="macro-target-1" class="repair-target macro-target"></select>
+        <span class="diff-arrow">→</span>
+        <select id="macro-target-2" class="repair-target macro-target"></select>
+        <span class="diff-arrow">→</span>
+        <select id="macro-target-3" class="repair-target macro-target">
+          <option value="">（仅 2 个目标：留空）</option>
+        </select>
+        <button id="synthesize-btn" type="button" class="btn primary">🎬 生成宏脚本</button>
+      </div>
+      <div id="synthesize-errors" class="errors" hidden></div>
+      <div id="synthesize-results" hidden></div>
+    </section>
+
     <section class="card rules">
       <h2>匹配规则</h2>
       <ul>
@@ -134,6 +157,7 @@
   <script src="engine.js"></script>
   <script src="diff.js"></script>
   <script src="repair.js"></script>
+  <script src="synthesize.js"></script>
   <script src="examples.js"></script>
   <script src="app.js"></script>
 </body>

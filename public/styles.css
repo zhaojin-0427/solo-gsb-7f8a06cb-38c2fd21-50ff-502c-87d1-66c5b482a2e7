@@ -325,6 +325,12 @@ input.invalid { border-color: var(--red); outline-color: var(--red); }
 
 #repair-timeline { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 
+/* ---------- 命令宏脚本 ---------- */
+
+.macro-row .macro-target { width: auto; min-width: 170px; }
+.macro-load-row { margin-top: 12px; }
+#synthesize-timeline { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+
 /* ---------- 其他 ---------- */
 
 .rules ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; }

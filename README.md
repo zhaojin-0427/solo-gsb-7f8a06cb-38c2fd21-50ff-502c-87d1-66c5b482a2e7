@@ -1,8 +1,8 @@
 # 快捷键回放器
 
-本地运行的快捷键回放网页：配置命令（命令 ID + 作用域 + 一至两步快捷键），选择当前作用域，输入按毫秒递增的按键事件，逐键回放匹配、等待、结算与未匹配原因。另提供「配置变更影响」视图：以当前命令表为旧配置、候选命令表为新配置，自动搜索两套配置触发结果不同的按键样例；以及「目标命令修正」视图：把已有事件的按键替换为配置中出现的按键，使指定命令至少触发一次。
+本地运行的快捷键回放网页：配置命令（命令 ID + 作用域 + 一至两步快捷键），选择当前作用域，输入按毫秒递增的按键事件，逐键回放匹配、等待、结算与未匹配原因。另提供「配置变更影响」视图：以当前命令表为旧配置、候选命令表为新配置，自动搜索两套配置触发结果不同的按键样例；「目标命令修正」视图：把已有事件的按键替换为配置中出现的按键，使指定命令至少触发一次；以及「命令宏脚本」视图：输入 2～3 个有序命令 ID，从空事件生成完整回放恰好按该顺序触发的按键脚本。
 
-技术栈：Node.js + Express + 原生前端（无构建步骤）。匹配引擎为前后端共享的纯函数模块（`public/engine.js`），配置比较模块为 `public/diff.js`、目标命令修正模块为 `public/repair.js`（均沿用回放引擎）。
+技术栈：Node.js + Express + 原生前端（无构建步骤）。匹配引擎为前后端共享的纯函数模块（`public/engine.js`），配置比较模块为 `public/diff.js`、目标命令修正模块为 `public/repair.js`、命令宏脚本模块为 `public/synthesize.js`（均沿用回放引擎）。
 
 ## 快速开始（Docker）
 
@@ -57,6 +57,14 @@ npm test         # 运行引擎单元测试（node:test）
 - 按（改动处数、事件下标序列、替换键序列）依次升序取首个方案，结果唯一；替换为原键不计入改动。
 - 显示改动位置（事件 #N：原键 → 新键）、修正后事件（改动处高亮）与修正后完整回放；无解时注明结论**仅限当前替换范围与现有时间戳**。
 - 限制：事件 ≤ **8** 个、候选按键 ≤ **12** 种，超限报错；配置、事件或目标命令 ID 无效即停止搜索并指出错误。
+
+**命令宏脚本（入口：页面「6 · 命令宏脚本」）**
+- 沿用「1 · 命令配置」与「2 · 当前作用域」，从**空事件**生成按键脚本；在视图内输入 **2～3 个有序命令 ID**（下拉与命令表同步，第 3 个可留空，ID 可重复）。
+- 命中条件：脚本经现有回放引擎**完整回放**（含前缀失配、超时、结束结算，以及当前作用域对全局的覆盖）后，触发的命令 ID 列表**恰好**等于输入顺序，不能夹带其他命令。
+- 搜索范围：候选按键只取**当前配置中出现的规范化按键**（排序去重）；首事件 t=0，相邻事件间隔限 **1 或 800ms**；至多 **5 个事件、5 种候选按键**，超限报错。
+- 按（事件数、按键序列、时间戳序列）依次升序枚举，首个命中的脚本即**唯一**解（结果与命令表行顺序无关）。
+- 展示宏脚本与完整回放时间线、触发顺序，并可一键**装入「3 · 按键事件」**复核（替换事件表并运行主回放）。
+- 无解时注明结论**仅限上述搜索范围**；配置、作用域或目标 ID 无效即停止搜索并指出原因。
 
 ## HTTP API
 
@@ -130,23 +138,48 @@ curl -X POST http://localhost:3000/api/repair-trace \
   - `solved: false` 时附 `note`：结论仅限当前替换范围（至多 2 处替换、候选按键限配置中出现的规范化键）与现有时间戳。
 - 配置、事件或目标 ID 非法，或超过限制（事件 > 8、候选按键 > 12）返回 `400`：`{ ok: false, errors: [...] }`（不进行任何搜索）。
 
+### `POST /api/synthesize-trace`
+
+命令宏脚本生成（与页面「命令宏脚本」视图同一引擎）：
+
+```bash
+curl -X POST http://localhost:3000/api/synthesize-trace \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "commands": [
+      {"id": "mark",     "scope": "editor", "keys": ["Ctrl+K"]},
+      {"id": "openFile", "scope": "editor", "keys": ["Ctrl+K", "Ctrl+F"]}
+    ],
+    "scope": "editor",
+    "targetIds": ["mark", "openFile"]
+  }'
+```
+
+- 成功返回 `200`：`{ ok, scope, targetIds, waitMs, maxEvents, maxKeys, gaps: [1, 800], candidateKeys, solved, checked, events, replay, note? }`。
+  - `checked`：枚举并回放检查过的脚本数；`events` 为生成的脚本（首事件 t=0，相邻间隔 ∈ {1, 800}ms）；`replay` 为完整回放（`timeline` / `triggered`），其命令 ID 列表恰好等于 `targetIds`。
+  - `solved: false` 时附 `note`：结论仅限上述搜索范围（至多 5 个事件、候选按键限配置中出现的规范化键、相邻间隔仅 1 / 800ms）。
+- 配置、作用域或目标 ID 非法（目标 ID 必须为 2～3 个、非空且存在于配置中，可重复），或候选按键 > 5 种，返回 `400`：`{ ok: false, errors: [...] }`（不进行任何搜索）。
+
 其他接口：`GET /api/health`、`GET /api/examples`。
 
 ## 项目结构
 
 ```
-├── server.js            # Express：静态页面 + /api/replay、/api/compare、/api/repair-trace 等接口
+├── server.js            # Express：静态页面 + /api/replay、/api/compare、/api/repair-trace、
+│                        #   /api/synthesize-trace 等接口
 ├── public/
-│   ├── index.html       # 页面结构（含「配置变更影响」「目标命令修正」视图）
+│   ├── index.html       # 页面结构（含「配置变更影响」「目标命令修正」「命令宏脚本」视图）
 │   ├── styles.css       # 样式
-│   ├── app.js           # 前端交互（表格、按键录入、录制、时间线、差异与修正视图渲染）
+│   ├── app.js           # 前端交互（表格、按键录入、录制、时间线、差异 / 修正 / 宏脚本视图渲染）
 │   ├── engine.js        # 匹配引擎（浏览器与 Node 共用）
 │   ├── diff.js          # 新旧配置差异搜索（复用 engine 回放，浏览器与 Node 共用）
 │   ├── repair.js        # 目标命令修正搜索（复用 engine 回放，浏览器与 Node 共用）
+│   ├── synthesize.js    # 命令宏脚本生成（复用 engine 回放，浏览器与 Node 共用）
 │   └── examples.js      # 可回放示例
 ├── test/engine.test.js  # 引擎单元测试（node:test）
-├── test/diff.test.js    # 配置比较单元测试（node:test）
-├── test/repair.test.js  # 目标命令修正单元测试（node:test）
+├── test/diff.test.js    # 配置比较单元测试
+├── test/repair.test.js  # 目标命令修正单元测试
+├── test/synthesize.test.js  # 命令宏脚本单元测试
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
@@ -157,4 +190,5 @@ curl -X POST http://localhost:3000/api/repair-trace \
 - 每步仅允许 Ctrl/Alt/Shift/Meta 与字母、数字、Enter、Escape；其他键（如 Tab、F5）会被拒绝并提示。
 - 事件时间需按毫秒递增，否则报错。
 - 目标命令修正：事件限 8 个、候选按键（配置中出现的规范化键）限 12 种；仅替换已有事件的按键，不增删事件、不改时间戳，最多替换 2 处。
+- 命令宏脚本：目标命令 ID 限 2～3 个（可重复）；脚本至多 5 个事件、候选按键（配置中出现的规范化键）至多 5 种；首事件 t=0，相邻事件间隔仅取 1 或 800ms；超出此范围的无解结论仅代表该搜索范围。
 - 浏览器无法捕获部分系统 / 浏览器保留快捷键（如 Ctrl+W），录制时请避开。

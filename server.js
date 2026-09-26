@@ -5,6 +5,7 @@ const express = require('express');
 const engine = require('./public/engine.js');
 const diff = require('./public/diff.js');
 const repair = require('./public/repair.js');
+const synth = require('./public/synth.js');
 const examples = require('./public/examples.js');
 
 const app = express();
@@ -39,6 +40,12 @@ app.post('/api/compare', (req, res) => {
 // 目标命令修正：{ commands: [...], scope: 'editor', events: [{t, key}], targetId: 'openFile' }
 app.post('/api/repair-trace', (req, res) => {
   const result = repair.repair(req.body || {});
+  res.status(result.ok ? 200 : 400).json(result);
+});
+
+// 命令宏脚本合成：{ commands: [...], scope: 'editor', targetIds: ['mark', 'openFile'] }
+app.post('/api/synthesize-trace', (req, res) => {
+  const result = synth.synth(req.body || {});
   res.status(result.ok ? 200 : 400).json(result);
 });
 

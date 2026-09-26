@@ -116,6 +116,29 @@
       <div id="repair-results" hidden></div>
     </section>
 
+    <section class="card" id="synth-view">
+      <h2>6 · 命令宏脚本</h2>
+      <p class="hint">
+        沿用上方「命令配置」与「当前作用域」。输入 <b>2～3 个有序命令 ID</b>（可重复），从<b>空事件</b>生成按键脚本，
+        使完整回放触发的命令 ID 列表<b>恰好</b>等于输入顺序（不夹带其他命令）。候选按键只取当前配置中出现的规范化键；
+        首事件 t=0，相邻事件间隔限 <b>1 或 800ms</b>，最多 <b>5 个事件、5 种候选按键</b>。
+        按（事件数、按键序列、时间戳序列）依次升序取唯一脚本；前缀失配、超时、结束结算与作用域覆盖均按现有回放引擎判定。
+      </p>
+      <div class="row" id="synth-targets">
+        <label class="repair-label">目标命令顺序</label>
+        <select class="synth-target synth-target-1"></select>
+        <span class="diff-arrow">→</span>
+        <select class="synth-target synth-target-2"></select>
+        <span class="synth-extra" hidden><span class="diff-arrow">→</span>
+        <select class="synth-target synth-target-3"></select></span>
+        <button id="synth-add-target" type="button" class="btn">＋ 第 3 个目标</button>
+        <button id="synth-remove-target" type="button" class="btn" hidden>－ 移除第 3 个</button>
+        <button id="synth-btn" type="button" class="btn primary">🧮 生成脚本</button>
+      </div>
+      <div id="synth-errors" class="errors" hidden></div>
+      <div id="synth-results" hidden></div>
+    </section>
+
     <section class="card rules">
       <h2>匹配规则</h2>
       <ul>
@@ -134,6 +157,7 @@
   <script src="engine.js"></script>
   <script src="diff.js"></script>
   <script src="repair.js"></script>
+  <script src="synth.js"></script>
   <script src="examples.js"></script>
   <script src="app.js"></script>
 </body>

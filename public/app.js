@@ -1,5 +1,5 @@
 /* 快捷键回放器 —— 前端交互（原生 JS，复用 engine.js 在本地回放） */
-/* global ShortcutEngine, ShortcutDiff, ShortcutRepair, EXAMPLES */
+/* global ShortcutEngine, ShortcutDiff, ShortcutRepair, ShortcutSynth, EXAMPLES */
 (function () {
   'use strict';
 
@@ -359,6 +359,7 @@
     });
     ex.events.forEach(function (ev) { addEventRow(ev.t, ev.key); });
     refreshRepairTargets();
+    refreshSynthTargets();
     run(scroll);
   }
 
@@ -567,6 +568,134 @@
     renderRepair(result, scroll);
   }
   $('#repair-btn').addEventListener('click', function () { runRepair(true); });
+
+  /* ---------------- 命令宏脚本 ---------------- */
+
+  var synthExtra = $('#synth-targets .synth-extra');
+  var lastSynthEvents = null;
+
+  // 目标命令下拉：与「命令配置」表格中的命令 ID 保持同步（三个下拉内容一致，可重复选取）
+  function refreshSynthTargets() {
+    var sels = document.querySelectorAll('.synth-target');
+    var prev = Array.prototype.map.call(sels, function (s) { return s.value; });
+    var ids = [];
+    gatherCommands().forEach(function (c) {
+      if (c.id && ids.indexOf(c.id) === -1) ids.push(c.id);
+    });
+    sels.forEach(function (sel, k) {
+      sel.innerHTML = '';
+      if (!ids.length) {
+        var empty = el('option', null, '（请先在「命令配置」中填写命令 ID）');
+        empty.value = '';
+        sel.appendChild(empty);
+        return;
+      }
+      ids.forEach(function (id) {
+        var opt = el('option', null, id);
+        opt.value = id;
+        sel.appendChild(opt);
+      });
+      if (ids.indexOf(prev[k]) !== -1) sel.value = prev[k];
+    });
+  }
+  $('#commands-body').addEventListener('input', refreshSynthTargets);
+  $('#commands-body').addEventListener('click', function () { setTimeout(refreshSynthTargets, 0); });
+  $('#add-command').addEventListener('click', refreshSynthTargets);
+
+  $('#synth-add-target').addEventListener('click', function () {
+    synthExtra.hidden = false;
+    $('#synth-add-target').hidden = true;
+    $('#synth-remove-target').hidden = false;
+  });
+  $('#synth-remove-target').addEventListener('click', function () {
+    synthExtra.hidden = true;
+    $('#synth-add-target').hidden = false;
+    $('#synth-remove-target').hidden = true;
+  });
+
+  // 把合成脚本装入现有「按键事件」表复核：清空后逐行填入，再运行一次主回放
+  function loadSynthEvents() {
+    if (!lastSynthEvents) return;
+    $('#events-body').innerHTML = '';
+    lastSynthEvents.forEach(function (ev) { addEventRow(ev.t, ev.key); });
+    run(true);
+    $('#results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.classList.contains('synth-load')) loadSynthEvents();
+  });
+
+  function synthTargetIds() {
+    var sels = document.querySelectorAll('.synth-target');
+    var ids = [sels[0].value, sels[1].value];
+    if (!synthExtra.hidden) ids.push(sels[2].value);
+    return ids;
+  }
+
+  function renderSynth(result, scroll) {
+    var errBox = $('#synth-errors');
+    var box = $('#synth-results');
+    errBox.innerHTML = '';
+    box.innerHTML = '';
+
+    if (!result.ok) {
+      // 配置 / 作用域 / 目标 ID 无效，或超过搜索上限：停止搜索并指出原因
+      errBox.innerHTML = '<h3>配置 / 作用域 / 目标有误，已停止搜索</h3><ul>' +
+        result.errors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul>';
+      errBox.hidden = false;
+      box.hidden = true;
+      if (scroll) errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    errBox.hidden = true;
+    box.hidden = false;
+
+    var head = '<p class="diff-summary">目标命令顺序：' +
+      result.targetIds.map(function (id, i) {
+        return '<span class="chip">' + (i + 1) + '. ' + esc(id) + '</span>';
+      }).join('<span class="diff-arrow">→</span>') +
+      '<br><span class="hint">作用域「' + LABELS[result.scope] + '」；候选按键 ' +
+      result.candidateKeys.length + ' 种' +
+      (result.candidateKeys.length ? '（' + result.candidateKeys.map(function (k) { return kbd(k); }).join(' ') + '）' : '（无）') +
+      '；搜索事件 ≤ ' + result.maxEvents + ' 个，相邻间隔 ∈ {1, ' + result.waitMs + '}ms；共枚举脚本 ' +
+      result.checked + ' 个。</span></p>';
+
+    if (!result.solved) {
+      box.innerHTML = head + '<p class="repair-none">✖ ' + esc(result.note) + '</p>';
+      if (scroll) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
+    var html = head +
+      '<p class="repair-zero">✔ 已生成唯一脚本（' + result.events.length + ' 个事件，按事件数、按键序列、时间戳序列升序取首个命中）。</p>' +
+      '<h3 class="repair-h">合成脚本（从空事件生成）</h3>' +
+      '<div class="repair-events">' + fmtRepairEvents(result.events, null) + '</div>' +
+      '<div class="row"><button type="button" class="btn synth-load">⧙ 装入「3 · 按键事件」复核</button></div>' +
+      '<h3 class="repair-h">完整回放</h3>';
+    box.innerHTML = html;
+
+    var tl = el('div');
+    tl.id = 'synth-timeline';
+    box.appendChild(tl);
+    renderTimeline(tl, result.replay.timeline);
+    var sum = el('div', 'summary');
+    sum.innerHTML = summaryHtml(result.replay.triggered);
+    box.appendChild(sum);
+    if (scroll) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function runSynth(scroll) {
+    refreshSynthTargets(); // 同步下拉与当前命令表（保留仍存在的选中项）
+    lastSynthEvents = null;
+    var result = ShortcutSynth.synth({
+      commands: gatherCommands(),
+      scope: currentScope(),
+      targetIds: synthTargetIds()
+    });
+    if (result.ok && result.solved) lastSynthEvents = result.events;
+    renderSynth(result, scroll);
+  }
+  $('#synth-btn').addEventListener('click', function () { runSynth(true); });
 
   // 默认载入第一个示例，打开页面即可看到一次完整回放
   loadExample(EXAMPLES[0]);
